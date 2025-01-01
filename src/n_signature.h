@@ -212,13 +212,135 @@ namespace n_signature{
       msg("[Fusion] %s\n", signature);
 
       // Copy to clipboard
+#ifdef __NT__
       if(n_settings::data & FLAG_COPY_CREATED_SIGNATURES_TO_CB)
         n_utils::copy_to_clipboard(signature);
+#endif
 
       // Now free the rendered signature
       free(signature);
 
       beep(beep_default);
+    }
+  }
+
+  // The pointer returned by this function must be free'd at some later time.
+  // This function is essentially the same as the above, however it returns the pointer to signature
+  // so that it can be accessed externally.
+  // It also doesn't generate any popups in IDA.
+  static i8* create_ex(ea_t target_addr, e_signature_style style){
+    if(!(n_settings::data & FLAG_ALLOW_SIG_CREATION_IN_DR) && get_func_num(target_addr) == 0xFFFFFFFF){
+      msg("[Fusion] Warning: `0x%llX` Is not in a valid assembly region.\n\nHint: You can disable this in the settings of Fusion.", target_addr);
+      return nullptr;
+    }
+
+    c_signature_generator signature_generator;
+    ea_t                  ea_region_start = 0;
+    ea_t                  ea_region_end   = 0;
+    ea_t                  ea_min          = 0;
+    ea_t                  ea_max          = 0;
+    n_utils::get_text_min_max(ea_min, ea_max);
+
+    // If we have selected a range of assembly code, then specifically sig that code only
+    if((n_settings::data & FLAG_COPY_SELECTED_BYTES_ONLY_IN_RANGE) && read_range_selection(nullptr, &ea_region_start, &ea_region_end)){
+      func_item_iterator_t iterator;
+      iterator.set_range(ea_region_start, ea_region_end);
+      for(ea_t addr = iterator.current(); true; addr = iterator.current()){
+        insn_t insn;
+        if(!decode_insn(&insn, addr))
+          break;
+
+        // Get the imm offset for this instruction
+        i32 imm_offset = n_utils::get_insn_imm_offset(&insn);
+
+        // Now add the bytes to the signature generator
+        for(ea_t op_addr = addr; op_addr < (addr + insn.size); op_addr++)
+          signature_generator.add(get_byte(op_addr), imm_offset > 0 && (op_addr - addr) >= imm_offset);
+
+        // These instructions are not parsed correctly by ida, so lets fix it
+        if(get_byte(addr) == 0xCC || get_byte(addr) == 0x90){
+          iterator.set_range(addr + 1, ea_max);
+          continue;
+        }
+
+        if(!iterator.next_not_tail())
+          break;
+      }
+    }
+    else{;
+      ea_t last_found_address = ea_min;
+
+      // Generate memory for the mnemonic opcodes list
+      u32 mnemonic_opcodes_len  = 5000/*5KB*/;
+      i8* mnemonic_opcodes      = (n_settings::data & FLAG_SHOW_MNEMONIC_OPCODES_SIGGED) ? (i8*)malloc(mnemonic_opcodes_len) : nullptr;
+
+      if(mnemonic_opcodes != nullptr)
+        memset(mnemonic_opcodes, 0, mnemonic_opcodes_len);
+
+      func_item_iterator_t iterator;
+      iterator.set_range(target_addr, ea_max);
+      for(ea_t addr = iterator.current(); true; addr = iterator.current()){
+        insn_t insn;
+        if(!decode_insn(&insn, addr))
+          break;
+
+        // Get the imm offset for this instruction
+        i32 imm_offset = n_utils::get_insn_imm_offset(&insn);
+
+        // Now add the bytes to the signature generator
+        for(ea_t op_addr = addr; op_addr < (addr + insn.size); op_addr++)
+          signature_generator.add(get_byte(op_addr), imm_offset > 0 && (op_addr - addr) >= imm_offset);
+
+        // Add details on whats going on in relation to this creation
+        if(n_settings::data & FLAG_SHOW_MNEMONIC_OPCODES_SIGGED){
+          qsnprintf(mnemonic_opcodes + strlen(mnemonic_opcodes), mnemonic_opcodes_len - strlen(mnemonic_opcodes), "+ %s\n", insn.get_canon_mnem(PH));
+        }
+
+        // Attempt to search for this signature, if nothing is found then we have a unique signature
+        {
+          i8* ida_sig = signature_generator.render(SIGNATURE_STYLE_IDA);
+          if(ida_sig == nullptr){
+            msg("[Fusion] fatal error rendering signature (1)\n");
+            break;
+          }
+
+          std::vector<ea_t> search_result = find(ida_sig, {true, true, target_addr, last_found_address, false});
+          free(ida_sig);
+          if(search_result.empty())
+            break;
+
+          // Update the last found address so we dont have to scan that region anymore
+          last_found_address = search_result[0];
+        }
+
+        // These instructions are not parsed correctly by ida, so lets fix it
+        if(get_byte(addr) == 0xCC || get_byte(addr) == 0x90){
+          iterator.set_range(addr + 1, ea_max);
+          continue;
+        }
+
+        if(!iterator.next_not_tail())
+          break;
+      }
+
+      if(mnemonic_opcodes != nullptr)
+        free(mnemonic_opcodes);
+    }
+
+    // Do we have a signature to build?
+    if(signature_generator.has_bytes){
+      // Trim the signature
+      signature_generator.trim();
+
+      // Create a render of the signature in the selected style
+      i8* signature = signature_generator.render(style);
+
+      if(signature == nullptr){
+        msg("[Fusion] fatal error rendering signature (2)\n");
+        return nullptr;
+      }
+
+      return signature;
     }
   }
 };

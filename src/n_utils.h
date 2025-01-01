@@ -22,6 +22,7 @@ namespace n_utils{
     ea_max = inf_get_max_ea();
   }
 
+#ifdef __NT__
   inline void copy_to_clipboard(i8* buffer){
     u32   alloc_len = strlen(buffer) + 1;
     void* alloc     = GlobalAlloc(GMEM_FIXED, alloc_len);
@@ -32,6 +33,7 @@ namespace n_utils{
     SetClipboardData(CF_TEXT, alloc);
     CloseClipboard();
   }
+#endif
 
   inline std::string format(i8* fmt, ...) {
     i8 buffer[1024];

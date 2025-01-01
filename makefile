@@ -1,18 +1,30 @@
-USE_COMPILER   := x86_64-w64-mingw32-g++
 COMPILER_FLAGS := -O3 -std=c++20 -s -w -Wreturn-type -fpermissive -Isdk/include
-LINKER_FLAGS   := -static -Wl,-exclude-all-symbols,--kill-at -shared
 OUTPUT_FLAGS   := -o $(OUTPUT_FILE)
 
 OBJ_DIR        := obj/
 OBJ_FILES      := $(wildcard $(OBJ_DIR)*.o)
 
-ifeq ($(BUILD_FOR), 32)
-  COMPILER_FLAGS += -Lsdk/lib/x64_win_vc_32
-else
-  COMPILER_FLAGS += -Lsdk/lib/x64_win_vc_64 -D__EA64__
-endif
+OSTYPE        := $(shell uname -s)
 
-LINKER_FLAGS   += -l:ida.lib
+ifeq ($(OSTYPE), Linux)
+	USE_COMPILER := gcc
+	COMPILER_FLAGS += -fPIC -D__LINUX__
+	LINKER_FLAGS := -shared -Lsdk/lib/x64_linux_gcc_64 -l:libida64.so -Wl,-rpath=sdk/lib/x64_linux_gcc_64
+	ifeq ($(BUILD_FOR), 32)
+		COMPILER_FLAGS += -Lsdk/lib/x64_linux_gcc_32
+	else
+		COMPILER_FLAGS += -Lsdk/lib/x64_linux_gcc_64 -D__EA64__
+	endif
+else
+	USE_COMPILER := x86_64-w64-mingw32-g++
+	COMPILER_FLAGS += -D__NT__
+	LINKER_FLAGS := -static -Wl,-exclude-all-symbols,--kill-at -shared -l:ida.lib
+	ifeq ($(BUILD_FOR), 32)
+		COMPILER_FLAGS += -Lsdk/lib/x64_win_vc_32
+	else
+		COMPILER_FLAGS += -Lsdk/lib/x64_win_vc_64 -D__EA64__
+	endif
+endif
 
 CPP_FILES      := $(wildcard ./sdk/includes/*.cpp) $(wildcard ./src/*.cpp)
 
@@ -35,4 +47,4 @@ make_output: $(OBJ_FILES)
 
 clean:
 	@printf "[INFO] Cleaning object files and output\n"
-	@rm -rf $(OBJ_DIR) *.exe *.dll
+	@rm -rf $(OBJ_DIR) *.exe *.dll *.so

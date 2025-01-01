@@ -1,5 +1,14 @@
 #include "link.h"
 
+// The pointer returned by this function MUST be free'd by free_signature.
+EXTERN i8* plugin_run_ex(ea_t target_addr, e_signature_style style) {
+  return n_signature::create_ex(target_addr, style);
+}
+
+EXTERN void free_signature(i8* signature) {
+  free(signature);
+}
+
 bool idaapi plugin_run(size_t arg){
   std::string form_str = n_utils::format(
     "IDA-Fusion for %.1f+\n"

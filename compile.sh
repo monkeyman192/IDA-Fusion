@@ -13,10 +13,15 @@ if [[ $ARCH -ne 32 && $ARCH -ne 64 ]]; then
     exit 1
 fi
 
-if [[ $ARCH -eq 32 ]]; then
-    OUTPUT_FILE="fusion.dll"
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    EXT="so"
 else
-    OUTPUT_FILE="fusion${ARCH}.dll"
+    EXT="dll"
+fi
+if [[ $ARCH -eq 32 ]]; then
+    OUTPUT_FILE="fusion.${EXT}"
+else
+    OUTPUT_FILE="fusion${ARCH}.${EXT}"
 fi
 
 rm -rf ./obj
