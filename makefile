@@ -15,6 +15,15 @@ ifeq ($(OSTYPE), Linux)
 	else
 		COMPILER_FLAGS += -Lsdk/lib/x64_linux_gcc_64 -D__EA64__
 	endif
+else ifeq ($(OSTYPE), Darwin)
+	USE_COMPILER := clang++
+	COMPILER_FLAGS += -D__MACOS__ -D__ARM__
+	LINKER_FLAGS := -dynamiclib -Lsdk/lib/arm64_mac_clang_64 -lida -Wl,-rpath,sdk/lib/arm64_mac_clang_64
+	ifeq ($(BUILD_FOR), 32)
+		COMPILER_FLAGS += -Lsdk/lib/arm64_mac_clang_32
+	else
+		COMPILER_FLAGS += -Lsdk/lib/arm64_mac_clang_64 -D__EA64__
+	endif
 else
 	USE_COMPILER := x86_64-w64-mingw32-g++
 	COMPILER_FLAGS += -D__NT__
@@ -26,7 +35,7 @@ else
 	endif
 endif
 
-CPP_FILES      := $(wildcard ./sdk/includes/*.cpp) $(wildcard ./src/*.cpp)
+CPP_FILES      := $(wildcard ./sdk/include/*.cpp) $(wildcard ./src/*.cpp)
 
 .PHONY: all make_objects make_output clean
 
@@ -47,4 +56,4 @@ make_output: $(OBJ_FILES)
 
 clean:
 	@printf "[INFO] Cleaning object files and output\n"
-	@rm -rf $(OBJ_DIR) *.exe *.dll *.so
+	@rm -rf $(OBJ_DIR) *.exe *.dll *.so *.dylib
