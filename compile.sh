@@ -15,6 +15,8 @@ fi
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     EXT="so"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    EXT="dynlib"
 else
     EXT="dll"
 fi
